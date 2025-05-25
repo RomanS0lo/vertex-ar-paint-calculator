@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Gradle files
 .gradle/
 build/
@@ -31,3 +32,48 @@ google-services.json
 
 # Android Profiling
 *.hprof
+=======
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Android
+*.apk
+*.ap_
+*.aab
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# iOS
+iosApp/Pods/
+iosApp/*.xcworkspace/xcuserdata/
+iosApp/*.xcodeproj/xcuserdata/
+iosApp/DerivedData/
+
+# Kotlin Multiplatform
+shared/build/
+composeApp/build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# IDE
+.vscode/
+*.swp
+*.swo
+>>>>>>> fe8bf2d (🎉 Initial Vertex KMM project setup)
