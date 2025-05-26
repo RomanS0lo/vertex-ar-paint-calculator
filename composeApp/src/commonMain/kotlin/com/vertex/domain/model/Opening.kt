@@ -1,5 +1,8 @@
 package com.vertex.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Opening(
     val id: String,
     val type: OpeningType,
@@ -10,6 +13,7 @@ data class Opening(
         get() = dimensions.width * dimensions.height
 }
 
+@Serializable
 enum class OpeningType {
     DOOR, WINDOW, ARCHWAY
 }

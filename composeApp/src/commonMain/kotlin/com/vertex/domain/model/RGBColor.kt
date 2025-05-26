@@ -1,5 +1,8 @@
 package com.vertex.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class RGBColor(
     val red: Int,   // 0-255
     val green: Int, // 0-255

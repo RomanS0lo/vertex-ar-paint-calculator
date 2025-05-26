@@ -1,5 +1,8 @@
 package com.vertex.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Surface(
     val id: String,
     val type: SurfaceType,
@@ -13,10 +16,12 @@ data class Surface(
         get() = dimensions.width * dimensions.height
 }
 
+@Serializable
 enum class SurfaceType {
     WALL, CEILING, TRIM
 }
 
+@Serializable
 enum class SurfaceTexture {
     SMOOTH,           // 350-400 sq ft per gallon
     LIGHT_TEXTURE,    // 300-350 sq ft per gallon
@@ -26,6 +31,7 @@ enum class SurfaceTexture {
     STUCCO           // 100-150 sq ft per gallon
 }
 
+@Serializable
 enum class SurfaceCondition {
     EXCELLENT,  // No primer needed
     GOOD,       // Light primer recommended
@@ -33,10 +39,12 @@ enum class SurfaceCondition {
     POOR        // Heavy primer + prep required
 }
 
+@Serializable
 enum class SurfaceMaterial {
     DRYWALL, WOOD, METAL, CONCRETE, BRICK, PLASTER
 }
 
+@Serializable
 data class SurfaceDimensions(
     val width: Double,
     val height: Double
