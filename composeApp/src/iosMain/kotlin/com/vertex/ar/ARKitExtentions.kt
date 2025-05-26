@@ -1,4 +1,6 @@
 //// iosMain/kotlin/com/vertex/ar/ARKitExtensions.kt
+//@file:OptIn(ExperimentalForeignApi::class)
+//
 //package com.vertex.ar
 //
 //import platform.ARKit.*
@@ -11,6 +13,9 @@
 //// Import your actual data model package - adjust this path to match your structure
 //// If your data classes are in a different package, update this import
 //import com.vertex.ar.domain.model.*
+//import com.vertex.domain.model.LightingQuality
+//import com.vertex.domain.model.RoomDimensions
+//import com.vertex.domain.model.SurfaceTexture
 //
 ///**
 // * Extension functions for ARKit interoperability

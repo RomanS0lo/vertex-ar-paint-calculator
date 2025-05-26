@@ -1,7 +1,6 @@
 package com.vertex.domain.model
 
 import kotlinx.serialization.Serializable
-
 @Serializable
 data class ARPlane(
     val id: String,

@@ -28,7 +28,10 @@ enum class SurfaceTexture {
     MEDIUM_TEXTURE,   // 250-300 sq ft per gallon
     HEAVY_TEXTURE,    // 200-250 sq ft per gallon
     BRICK,            // 150-200 sq ft per gallon
-    STUCCO           // 100-150 sq ft per gallon
+    STUCCO,           // 100-150 sq ft per gallon
+    CONCRETE,         // 50-100 sq ft per gallon
+    WOOD,             // <50 sq ft per gallon
+    UNKNOWN
 }
 
 @Serializable

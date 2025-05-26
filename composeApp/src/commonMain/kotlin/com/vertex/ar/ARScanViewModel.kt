@@ -1,8 +1,6 @@
 // commonMain/kotlin/com/vertex/presentation/arscan/ARScanViewModel.kt
-package com.vertex.presentation.arscan
+package com.vertex.ar
 
-import com.vertex.ar.ARManager
-import com.vertex.ar.ARSession
 import com.vertex.domain.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,12 +99,20 @@ class ARScanViewModel(
     }
 
     private fun handleScanResult(scanResult: ARScanResult) {
-        // Update detected planes
+        // Update detected planes - convert DetectedPlane to ARPlane
         detectedPlanes.clear()
-        detectedPlanes.addAll(scanResult.detectedPlanes)
+        detectedPlanes.addAll(scanResult.detectedPlanes.map { detectedPlane ->
+            ARPlane(
+                id = detectedPlane.id,
+                type = detectedPlane.type,
+                width = kotlin.math.sqrt(detectedPlane.area), // Approximate width
+                height = kotlin.math.sqrt(detectedPlane.area), // Approximate height
+                area = detectedPlane.area
+            )
+        })
 
         // Estimate room dimensions from planes
-        roomDimensions = estimateRoomDimensionsFromPlanes(scanResult.detectedPlanes)
+        roomDimensions = estimateRoomDimensionsFromPlanes(detectedPlanes)
 
         // Update UI state
         _uiState.update { currentState ->
@@ -114,12 +120,13 @@ class ARScanViewModel(
                 currentScanResult = scanResult,
                 scanProgress = scanResult.scanProgress,
                 detectedSurfaces = scanResult.detectedPlanes.size,
-                roomArea = scanResult.roomArea,
+                roomArea = scanResult.roomArea.toDouble(),
                 lightingQuality = when (scanResult.lightingCondition?.ambientIntensity) {
                     null -> LightingQuality.UNKNOWN
-                    in 0f..500f -> LightingQuality.POOR
-                    in 500f..1000f -> LightingQuality.FAIR
-                    else -> LightingQuality.GOOD
+                    in 0f..200f -> LightingQuality.POOR
+                    in 200f..500f -> LightingQuality.FAIR
+                    in 500f..1000f -> LightingQuality.GOOD
+                    else -> LightingQuality.EXCELLENT
                 },
                 canFinishScanning = scanResult.scanProgress > 0.7f
             )
@@ -217,8 +224,8 @@ class ARScanViewModel(
     }
 
     private fun estimateRoomDimensionsFromPlanes(planes: List<ARPlane>): RoomDimensions {
-        val walls = planes.filter { it.type == PlaneType.WALL }
-        val floors = planes.filter { it.type == PlaneType.FLOOR }
+        val walls = planes.filter { it.type == PlaneType.VERTICAL }
+        val floors = planes.filter { it.type == PlaneType.HORIZONTAL_DOWN }
 
         // Simple estimation - in production, use more sophisticated algorithms
         val width = walls.maxOfOrNull { it.width } ?: 3.0
@@ -273,13 +280,6 @@ enum class ScanningState {
     PROCESSING,
     COMPLETED,
     ERROR
-}
-
-enum class LightingQuality {
-    UNKNOWN,
-    POOR,
-    FAIR,
-    GOOD
 }
 
 /**

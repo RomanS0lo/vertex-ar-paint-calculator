@@ -7,11 +7,29 @@ import android.content.Context
 import android.util.Log
 import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
-import com.vertex.domain.model.*
+
+import com.vertex.domain.model.ARPlane
+import com.vertex.domain.model.ARScanData
+import com.vertex.domain.model.ARScanResult
+import com.vertex.domain.model.DetectedPlane
+import com.vertex.domain.model.LightingConditionData
+import com.vertex.domain.model.PlaneOrientation
+import com.vertex.domain.model.PlaneType
+import com.vertex.domain.model.Position3D
+import com.vertex.domain.model.Room
+import com.vertex.domain.model.ScanWarning
+import com.vertex.domain.model.ScanWarningType
+import com.vertex.domain.model.Surface
+import com.vertex.domain.model.SurfaceCondition
+import com.vertex.domain.model.SurfaceDimensions
+import com.vertex.domain.model.SurfaceMaterial
+import com.vertex.domain.model.SurfaceTexture
+import com.vertex.domain.model.SurfaceType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.datetime.Clock
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -78,23 +96,42 @@ actual class ARManager(private val context: Context) {
                 if (camera.trackingState == TrackingState.TRACKING) {
                     val planes = session.getAllTrackables(Plane::class.java)
                         .filter { it.trackingState == TrackingState.TRACKING }
-                        .map { convertPlaneToARPlane(it) }
+                        .map { convertPlaneToDetectedPlane(it) }
 
                     val progress = calculateScanProgress(planes)
                     val roomArea = calculateRoomArea(planes)
 
+                    // Get light estimate if available
+                    val lightEstimate = frame.lightEstimate
+                    val lightingCondition = if (true) {
+                        LightingConditionData(
+                            ambientIntensity = lightEstimate.pixelIntensity,
+                            colorTemperature = lightEstimate.colorCorrection[0] * 6500f, // Approximate
+                            isAdequateForColorMatching = lightEstimate.pixelIntensity > 0.3f
+                        )
+                    } else null
+
                     emit(ARScanResult(
-                        isTracking = true,
-                        detectedPlanes = planes,
                         scanProgress = progress,
-                        roomArea = roomArea
+                        detectedPlanes = planes,
+                        roomArea = roomArea.toFloat(),
+                        lightingCondition = lightingCondition,
+                        trackingState = TrackingState.NORMAL,
+                        scanQuality = if (progress > 0.5f) 0.8f else 0.5f,
+                        warnings = emptyList()
                     ))
                 } else {
                     emit(ARScanResult(
-                        isTracking = false,
-                        detectedPlanes = emptyList(),
                         scanProgress = 0f,
-                        roomArea = 0.0
+                        detectedPlanes = emptyList(),
+                        roomArea = 0f,
+                        lightingCondition = null,
+                        trackingState = TrackingState.NOT_AVAILABLE,
+                        scanQuality = 0f,
+                        warnings = listOf(ScanWarning(
+                            type = ScanWarningType.TRACKING_LOST,
+                            message = "Tracking lost. Move slowly and ensure good lighting."
+                        ))
                     ))
                 }
             } catch (e: Exception) {
@@ -106,8 +143,8 @@ actual class ARManager(private val context: Context) {
     }
 
     actual suspend fun generateRoom(scanData: ARScanData): Room {
-        val walls = scanData.planes.filter { it.type == PlaneType.WALL }
-        val ceilings = scanData.planes.filter { it.type == PlaneType.CEILING }
+        val walls = scanData.planes.filter { it.type == PlaneType.VERTICAL }
+        val ceilings = scanData.planes.filter { it.type == PlaneType.HORIZONTAL_DOWN }
         // Note: We typically don't paint floors, so filtering them out
 
         val surfaces = mutableListOf<Surface>()
@@ -145,12 +182,12 @@ actual class ARManager(private val context: Context) {
         }
 
         return Room(
-            id = "ar_room_${System.currentTimeMillis()}",
+            id = "ar_room_${Clock.System.now().toEpochMilliseconds()}",
             name = "AR Scanned Room",
             dimensions = scanData.roomDimensions,
             surfaces = surfaces,
             openings = emptyList(), // To be detected in future enhancement
-            createdAt = System.currentTimeMillis()
+            createdAt = Clock.System.now()
         )
     }
 
@@ -161,25 +198,37 @@ actual class ARManager(private val context: Context) {
         isInitialized = false
     }
 
-    private fun convertPlaneToARPlane(plane: Plane): ARPlane {
+    private fun convertPlaneToDetectedPlane(plane: Plane): DetectedPlane {
         val planeType = when (plane.type) {
-            Plane.Type.HORIZONTAL_UPWARD_FACING -> PlaneType.FLOOR
-            Plane.Type.HORIZONTAL_DOWNWARD_FACING -> PlaneType.CEILING
-            Plane.Type.VERTICAL -> PlaneType.WALL
+            Plane.Type.HORIZONTAL_UPWARD_FACING -> PlaneType.HORIZONTAL_UP
+            Plane.Type.HORIZONTAL_DOWNWARD_FACING -> PlaneType.HORIZONTAL_DOWN
+            Plane.Type.VERTICAL -> PlaneType.VERTICAL
         }
 
-        return ARPlane(
+        val centerPose = plane.centerPose
+        val translation = centerPose.translation
+
+        return DetectedPlane(
             id = plane.hashCode().toString(),
             type = planeType,
-            width = plane.extentX,
-            height = plane.extentZ,
-            area = plane.extentX * plane.extentZ
+            area = plane.extentX * plane.extentZ,
+            center = Position3D(
+                x = translation[0],
+                y = translation[1],
+                z = translation[2]
+            ),
+            orientation = when (plane.type) {
+                Plane.Type.HORIZONTAL_UPWARD_FACING,
+                Plane.Type.HORIZONTAL_DOWNWARD_FACING -> PlaneOrientation.HORIZONTAL
+                Plane.Type.VERTICAL -> PlaneOrientation.VERTICAL
+                else -> PlaneOrientation.ANGLED
+            }
         )
     }
 
-    private fun calculateScanProgress(planes: List<ARPlane>): Float {
-        val walls = planes.count { it.type == PlaneType.WALL }
-        val floors = planes.count { it.type == PlaneType.FLOOR }
+    private fun calculateScanProgress(planes: List<DetectedPlane>): Float {
+        val walls = planes.count { it.type == PlaneType.VERTICAL }
+        val floors = planes.count { it.type == PlaneType.HORIZONTAL_UP }
 
         // Progress calculation: need at least 4 walls and 1 floor for a complete room
         val wallProgress = (walls.toFloat() / 4f).coerceAtMost(1f) * 0.7f
@@ -188,9 +237,9 @@ actual class ARManager(private val context: Context) {
         return (wallProgress + floorProgress).coerceAtMost(1f)
     }
 
-    private fun calculateRoomArea(planes: List<ARPlane>): Double {
+    private fun calculateRoomArea(planes: List<DetectedPlane>): Double {
         return planes
-            .filter { it.type == PlaneType.FLOOR }
+            .filter { it.type == PlaneType.HORIZONTAL_UP }
             .sumOf { it.area.toDouble() }
     }
 }
@@ -226,9 +275,9 @@ class AndroidARSession(private val session: Session) : ARSession {
                 .filter { it.trackingState == TrackingState.TRACKING }
                 .map { plane ->
                     val planeType = when (plane.type) {
-                        Plane.Type.HORIZONTAL_UPWARD_FACING -> PlaneType.FLOOR
-                        Plane.Type.HORIZONTAL_DOWNWARD_FACING -> PlaneType.CEILING
-                        Plane.Type.VERTICAL -> PlaneType.WALL
+                        Plane.Type.HORIZONTAL_UPWARD_FACING -> PlaneType.HORIZONTAL_UP
+                        Plane.Type.HORIZONTAL_DOWNWARD_FACING -> PlaneType.HORIZONTAL_DOWN
+                        Plane.Type.VERTICAL -> PlaneType.VERTICAL
                     }
 
                     ARPlane(
